@@ -1,14 +1,29 @@
 [
   {
     "name": "week",
-    "title": "This week",
-    "subtitle": "Trial Site for Claude Code: what needs attention, rendered by npm run view",
+    "title": "The site this week",
+    "subtitle": "Read-only snapshot from the database. Demo records are fictional.",
     "sections": [
-      {
-        "title": "Needs attention",
-        "note": "TODO(author): point this at the industry's attention view (overdue, stuck, quiet).",
-        "sql": "select 'replace me' as item, 'TODO(author)' as why"
-      }
+      { "title": "Needs someone today", "note": "Safety clocks first, then visits, money, documents and enrolment.", "sql": "select item,protocol,record,owner,due_date,detail from v_attention order by case item when 'SAE CLOCK' then 1 when 'VISIT OVERDUE' then 2 when 'VISIT DUE' then 3 when 'INVOICE OVERDUE' then 4 when 'NOT INVOICED' then 5 else 6 end,due_date" },
+      { "title": "Visit windows in the next 14 days", "sql": "select protocol,subject_number,visit,state,window_opens,window_closes,coordinator from v_visits where state in ('overdue','window open','upcoming') and participant_status in ('enrolled','screening') and coalesce(window_opens,scheduled_on)<=current_date+14 order by window_closes nulls last" },
+      { "title": "Enrolment", "sql": "select protocol,sponsor,status,target,enrolled,should_have_by_now,screening,screen_failed,enrolment_closes_on from v_enrolment where status<>'closed' order by protocol" }
+    ]
+  },
+  {
+    "name": "money",
+    "title": "Sponsor money",
+    "subtitle": "Earned and not invoiced, and invoices not yet paid.",
+    "sections": [
+      { "title": "Totals by study", "sql": "select protocol,sponsor,currency,state,count(*)::int as items,round(sum(amount_cents)/100.0) as amount from v_receivables group by protocol,sponsor,currency,state order by protocol,state" },
+      { "title": "Every item", "sql": "select state,protocol,description,round(amount_cents/100.0) as amount,currency,since,days from v_receivables order by state,days desc" }
+    ]
+  },
+  {
+    "name": "compliance",
+    "title": "Record checks",
+    "subtitle": "What the checks found against the rules in docs/compliance.md. Not legal or regulatory advice.",
+    "sections": [
+      { "title": "Findings", "sql": "select rule,protocol,record,finding,due_date,source from v_compliance order by rule,protocol" }
     ]
   }
 ]

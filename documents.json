@@ -1,11 +1,53 @@
 [
   {
-    "name": "example",
-    "title": "TODO(author): the first document this industry must produce",
-    "for_each": "select gen_random_uuid() as id, 'Example' as name",
-    "file": "name",
+    "name": "invoice",
+    "title": "Tax invoice",
+    "for_each": "select i.id,i.number from invoices i",
+    "file": "number",
     "sections": [
-      { "title": "Details", "sql": "select 'replace me' as item, $1::text as record_id" }
+      { "title": "Invoice", "sql": "select i.number,sp.name as bill_to,sp.contact_name as attention,s.protocol,s.title as study,i.issued_on,i.due_on,round(i.amount_cents/100.0,2) as total,s.currency from invoices i join studies s on s.id=i.study_id join sponsors sp on sp.id=s.sponsor_id where i.id=$1" },
+      { "title": "Lines", "note": "Each line is a completed visit, screen failure or fee under the clinical trial agreement.", "sql": "select c.earned_on,c.description,c.kind,round(c.amount_cents/100.0,2) as amount from charges c where c.invoice_id=$1 order by c.earned_on" }
+    ]
+  },
+  {
+    "name": "visit-schedule",
+    "title": "Your study visit schedule",
+    "for_each": "select p.id,p.subject_number from participants p where p.status in ('enrolled','screening')",
+    "file": "subject_number",
+    "sections": [
+      { "title": "Study", "sql": "select s.protocol,s.title,p.subject_number,c.name as your_coordinator from participants p join studies s on s.id=p.study_id left join staff c on c.id=p.coordinator_id where p.id=$1" },
+      { "title": "Visits", "note": "Each visit can happen any day inside its window. Call us if a date does not suit.", "sql": "select visit,window_opens,window_closes,case when state in ('done','out of window') then 'done '||completed_on else '' end as status from v_visits where participant_id=$1 order by seq" }
+    ]
+  },
+  {
+    "name": "delegation-log",
+    "title": "Site delegation log",
+    "for_each": "select id,protocol from studies where status<>'closed'",
+    "file": "protocol",
+    "sections": [
+      { "title": "Study", "sql": "select s.protocol,s.title,pi.name as principal_investigator,s.ethics_ref from studies s left join staff pi on pi.id=s.pi_id where s.id=$1" },
+      { "title": "Delegated tasks", "note": "The principal investigator signs and dates each line. Check against the signed paper or electronic log before an inspection.", "sql": "select st.name,st.role,d.tasks,d.start_on,d.end_on,d.pi_signed_on,st.gcp_trained_on,st.cv_signed_on from delegations d join staff st on st.id=d.staff_id where d.study_id=$1 order by d.start_on,st.name" }
+    ]
+  },
+  {
+    "name": "progress-report",
+    "title": "Annual progress report figures (draft)",
+    "for_each": "select id,protocol from studies where status not in ('feasibility','closed') and ethics_approved_on is not null",
+    "file": "protocol",
+    "sections": [
+      { "title": "Study", "note": "Draft figures for the ethics committee's own form. Nothing is submitted from here.", "sql": "select s.protocol,s.title,s.ethics_ref,s.ethics_approved_on,s.last_progress_report_on,s.status,s.consent_version from studies s where s.id=$1" },
+      { "title": "Recruitment", "sql": "select target,enrolled,screening,screen_failed from v_enrolment where study_id=$1" },
+      { "title": "Safety", "sql": "select count(*)::int as adverse_events,count(*) filter (where serious)::int as serious from adverse_events a join participants p on p.id=a.participant_id where p.study_id=$1" },
+      { "title": "Deviations", "sql": "select occurred_on,description,reported_on from deviations where study_id=$1 order by occurred_on" }
+    ]
+  },
+  {
+    "name": "sae-summary",
+    "title": "Serious adverse event summary (site record)",
+    "for_each": "select a.id,p.subject_number||'-'||to_char(a.aware_at,'YYYYMMDD') as ref from adverse_events a join participants p on p.id=a.participant_id where a.serious",
+    "file": "ref",
+    "sections": [
+      { "title": "Event", "note": "A site record of what was reported and when. The sponsor's own SAE form is what goes to the sponsor.", "sql": "select s.protocol,p.subject_number,a.description,a.onset_on,to_char(a.aware_at,'YYYY-MM-DD HH24:MI') as site_aware,to_char(a.reported_at,'YYYY-MM-DD HH24:MI') as reported_to_sponsor,round(extract(epoch from (a.reported_at-a.aware_at))/3600)::int as hours,a.outcome,a.resolved_on from adverse_events a join participants p on p.id=a.participant_id join studies s on s.id=p.study_id where a.id=$1" }
     ]
   }
 ]
